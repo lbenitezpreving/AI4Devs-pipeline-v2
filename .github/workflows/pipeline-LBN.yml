@@ -51,7 +51,7 @@ jobs:
         if: steps.check_pr.outputs.result == 'false'
         run: |
           cd backend
-          npm ci
+          npm install
 
       - name: Run backend tests
         if: steps.check_pr.outputs.result == 'false'
@@ -103,7 +103,7 @@ jobs:
 
             # Instalar dependencias de producción si es necesario
             cd ~/app/backend
-            npm ci --only=production
+            npm install --only=production
 
             # Reiniciar el servicio (asumiendo que usamos PM2)
             if pm2 list | grep -q backend; then
