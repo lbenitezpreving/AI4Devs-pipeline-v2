@@ -92,25 +92,15 @@ jobs:
           # Transferir el paquete a EC2
           scp backend-dist.tar.gz ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/
 
-          # Ejecutar comandos de despliegue en el servidor
-          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-            # Crear estructura de directorios si no existe
-            mkdir -p ~/app/backend
-
-            # Extraer el nuevo build
-            tar -xzf ~/backend-dist.tar.gz -C ~/app/backend
-            rm ~/backend-dist.tar.gz
-
-            # Instalar dependencias de producción si es necesario
-            cd ~/app/backend
-            npm install --only=production
-
-            # Reiniciar el servicio (asumiendo que usamos PM2)
-            if pm2 list | grep -q backend; then
-              pm2 restart backend
-            else
-              pm2 start npm --name "backend" -- run start
-            fi
-
-            echo "Despliegue completado con éxito"
-          EOF 
+          # Ejecutar comandos de despliegue en el servidor sin heredoc
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "mkdir -p ~/app/backend && \
+          tar -xzf ~/backend-dist.tar.gz -C ~/app/backend && \
+          rm ~/backend-dist.tar.gz && \
+          cd ~/app/backend && \
+          npm install --only=production && \
+          if pm2 list | grep -q backend; then \
+            pm2 restart backend; \
+          else \
+            pm2 start npm --name 'backend' -- run start; \
+          fi && \
+          echo 'Despliegue completado con éxito'" 
