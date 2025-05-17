@@ -85,9 +85,9 @@ jobs:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USER: ${{ secrets.EC2_USER }}
         run: |
-          # Empaquetar la carpeta dist del backend
+          # Empaquetar la carpeta dist del backend y package.json
           cd backend
-          tar -czf backend-dist.tar.gz dist/
+          tar -czf backend-dist.tar.gz dist/ package.json
 
           # Transferir el paquete a EC2
           scp backend-dist.tar.gz ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/
