@@ -39,7 +39,7 @@ jobs:
           result-encoding: string
 
       - name: Install Node.js
-        if: steps.check_pr.outputs.result == 'true'
+        if: steps.check_pr.outputs.result == 'false'
         uses: actions/setup-node@v3
         with:
           node-version: 18
@@ -48,20 +48,20 @@ jobs:
 
       # Backend Tests
       - name: Install backend dependencies
-        if: steps.check_pr.outputs.result == 'true'
+        if: steps.check_pr.outputs.result == 'false'
         run: |
           cd backend
           npm ci
 
       - name: Run backend tests
-        if: steps.check_pr.outputs.result == 'true'
+        if: steps.check_pr.outputs.result == 'false'
         run: |
           cd backend
           npm test
 
       # Backend Build
       - name: Build backend
-        if: steps.check_pr.outputs.result == 'true' && success()
+        if: steps.check_pr.outputs.result == 'false' && success()
         run: |
           cd backend
           npm run build
