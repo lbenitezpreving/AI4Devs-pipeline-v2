@@ -1,0 +1,116 @@
+name: Backend CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - '*'  # Ejecutar en cualquier rama
+
+jobs:
+  test-build-deploy:
+    runs-on: ubuntu-latest
+    
+    # Verifica si hay un PR abierto para esta rama/commit
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Check if PR exists
+        id: check_pr
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const branch = context.ref.replace('refs/heads/', '');
+            
+            const prs = await github.rest.pulls.list({
+              owner,
+              repo,
+              state: 'open',
+              head: `${owner}:${branch}`
+            });
+            
+            if (prs.data.length > 0) {
+              console.log(`Found open PR for branch ${branch}`);
+              return true;
+            } else {
+              console.log(`No open PR found for branch ${branch}`);
+              return false;
+            }
+          result-encoding: string
+
+      - name: Install Node.js
+        if: steps.check_pr.outputs.result == 'true'
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      # Backend Tests
+      - name: Install backend dependencies
+        if: steps.check_pr.outputs.result == 'true'
+        run: |
+          cd backend
+          npm ci
+
+      - name: Run backend tests
+        if: steps.check_pr.outputs.result == 'true'
+        run: |
+          cd backend
+          npm test
+
+      # Backend Build
+      - name: Build backend
+        if: steps.check_pr.outputs.result == 'true' && success()
+        run: |
+          cd backend
+          npm run build
+
+      # Backend Deploy to EC2 (solo como ejemplo, normalmente no querríamos desplegar en cada PR)
+      - name: Configure SSH
+        if: steps.check_pr.outputs.result == 'true' && success()
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+
+      - name: Setup known hosts
+        if: steps.check_pr.outputs.result == 'true' && success()
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to EC2
+        if: steps.check_pr.outputs.result == 'true' && success()
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          # Empaquetar la carpeta dist del backend
+          cd backend
+          tar -czf backend-dist.tar.gz dist/
+
+          # Transferir el paquete a EC2
+          scp backend-dist.tar.gz ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/
+
+          # Ejecutar comandos de despliegue en el servidor
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            # Crear estructura de directorios si no existe
+            mkdir -p ~/app/backend
+
+            # Extraer el nuevo build
+            tar -xzf ~/backend-dist.tar.gz -C ~/app/backend
+            rm ~/backend-dist.tar.gz
+
+            # Instalar dependencias de producción si es necesario
+            cd ~/app/backend
+            npm ci --only=production
+
+            # Reiniciar el servicio (asumiendo que usamos PM2)
+            if pm2 list | grep -q backend; then
+              pm2 restart backend
+            else
+              pm2 start npm --name "backend" -- run start
+            fi
+
+            echo "Despliegue completado con éxito"
+          EOF 
